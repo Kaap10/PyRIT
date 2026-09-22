@@ -86,24 +86,6 @@ class OptimizationRunState:
 
 
 @dataclass
-class ProgressiveScheduleState:
-    """
-    Typed schedule state for ``ProgressiveMultiPromptAttack``.
-
-    Tracks how many goals and workers have been admitted so far, together with
-    the shared step counter and the loss carried between progressive rounds.
-    Exposed as ``ProgressiveMultiPromptAttack.last_schedule_state`` after a call
-    to ``ProgressiveMultiPromptAttack.run``.
-    """
-
-    goals_admitted: int
-    workers_admitted: int
-    steps_completed: int = 0
-    loss: float = float("inf")
-    stop_inner_on_success: bool = False
-
-
-@dataclass
 class RngBundle:
     """Per-run RNG state bundle for deterministic GCG execution."""
 
