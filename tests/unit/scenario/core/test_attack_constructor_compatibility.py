@@ -247,3 +247,26 @@ class TestGetScoringConfigType:
             attack_class=_StubWithFailingHints, scorer_override_policy=ScorerOverridePolicy.SKIP
         )
         assert helper.scoring_config_type is None
+
+    def test_resolves_deferred_forward_ref_after_init(self):
+        class _AttackWithDeferredRef:
+            def __init__(self, *, attack_scoring_config: "DeferredConfig | None" = None):  # noqa: F821
+                pass
+
+        helper = _ConstructorCompatibilityHelper(
+            attack_class=_AttackWithDeferredRef, scorer_override_policy=ScorerOverridePolicy.SKIP
+        )
+        # Initially unresolvable
+        assert helper.scoring_config_type is None
+
+        class _DeferredConfig(AttackScoringConfig):
+            pass
+
+        import sys
+
+        mod_dict = sys.modules[_AttackWithDeferredRef.__module__].__dict__
+        mod_dict["DeferredConfig"] = _DeferredConfig
+        try:
+            assert helper.scoring_config_type is _DeferredConfig
+        finally:
+            mod_dict.pop("DeferredConfig", None)

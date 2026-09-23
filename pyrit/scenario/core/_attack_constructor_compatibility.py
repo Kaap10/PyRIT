@@ -36,7 +36,11 @@ class _ConstructorCompatibilityHelper:
         self._scorer_override_policy = scorer_override_policy
 
         self.accepted_params = self._derive_accepted_params()
-        self.scoring_config_type = self._derive_scoring_config_type()
+
+    @property
+    def scoring_config_type(self) -> type | None:
+        """The required ``attack_scoring_config`` subtype, or ``None`` if any config is accepted."""
+        return self._derive_scoring_config_type()
 
     def _derive_accepted_params(self) -> set[str]:
         """Return the set of keyword parameter names accepted by the attack class constructor."""

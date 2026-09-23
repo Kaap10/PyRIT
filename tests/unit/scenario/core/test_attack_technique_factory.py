@@ -16,7 +16,7 @@ from pyrit.models import AttackTechniqueSeedGroup, ComponentIdentifier, Identifi
 from pyrit.prompt_normalizer import ConverterConfiguration
 from pyrit.prompt_target import PromptTarget
 from pyrit.scenario.core.attack_technique import AttackTechnique
-from pyrit.scenario.core.attack_technique_factory import AttackTechniqueFactory
+from pyrit.scenario.core.attack_technique_factory import AttackTechniqueFactory, ScorerOverridePolicy
 
 
 def _make_seed_technique() -> AttackTechniqueSeedGroup:
@@ -426,6 +426,125 @@ class TestFactoryCreate:
         )
 
         assert isinstance(technique, AttackTechnique)
+
+    def test_create_with_deferred_forward_ref_scoring_config_policy_raise(self):
+        """Forward-referenced scoring config defined after factory init resolves and raises on incompatible type."""
+        import sys
+
+        class _DeferredAttack:
+            def __init__(
+                self,
+                *,
+                objective_target: PromptTarget,
+                attack_scoring_config: "DeferredNarrowConfig | None" = None,  # noqa: F821
+            ):
+                self.objective_target = objective_target
+                self.attack_scoring_config = attack_scoring_config
+
+            def get_identifier(self):
+                return ComponentIdentifier(class_name="_DeferredAttack", class_module=__name__)
+
+        factory = AttackTechniqueFactory(
+            name="deferred_test",
+            attack_class=_DeferredAttack,
+            scorer_override_policy=ScorerOverridePolicy.RAISE,
+            uses_adversarial=False,
+        )
+
+        class _DeferredNarrowConfig(AttackScoringConfig):
+            pass
+
+        mod_dict = sys.modules[_DeferredAttack.__module__].__dict__
+        mod_dict["DeferredNarrowConfig"] = _DeferredNarrowConfig
+
+        try:
+            target = MagicMock(spec=PromptTarget)
+            # Incompatible base config should raise ValueError
+            with pytest.raises(ValueError, match="incompatible"):
+                factory.create(objective_target=target, attack_scoring_config=AttackScoringConfig())
+
+            # Compatible config should succeed
+            narrow_config = _DeferredNarrowConfig()
+            technique = factory.create(objective_target=target, attack_scoring_config=narrow_config)
+            assert technique.attack.attack_scoring_config is narrow_config
+        finally:
+            mod_dict.pop("DeferredNarrowConfig", None)
+
+    def test_create_with_deferred_forward_ref_scoring_config_policy_warn(self, caplog):
+        """Forward-referenced scoring config with WARN policy logs and omits incompatible config."""
+        import sys
+
+        class _DeferredWarnAttack:
+            def __init__(
+                self,
+                *,
+                objective_target: PromptTarget,
+                attack_scoring_config: "DeferredWarnConfig | None" = None,  # noqa: F821
+            ):
+                self.objective_target = objective_target
+                self.attack_scoring_config = attack_scoring_config
+
+            def get_identifier(self):
+                return ComponentIdentifier(class_name="_DeferredWarnAttack", class_module=__name__)
+
+        factory = AttackTechniqueFactory(
+            name="deferred_warn_test",
+            attack_class=_DeferredWarnAttack,
+            scorer_override_policy=ScorerOverridePolicy.WARN,
+            uses_adversarial=False,
+        )
+
+        class _DeferredWarnConfig(AttackScoringConfig):
+            pass
+
+        mod_dict = sys.modules[_DeferredWarnAttack.__module__].__dict__
+        mod_dict["DeferredWarnConfig"] = _DeferredWarnConfig
+
+        try:
+            target = MagicMock(spec=PromptTarget)
+            technique = factory.create(objective_target=target, attack_scoring_config=AttackScoringConfig())
+            assert technique.attack.attack_scoring_config is None
+            assert "incompatible" in caplog.text
+        finally:
+            mod_dict.pop("DeferredWarnConfig", None)
+
+    def test_create_with_deferred_forward_ref_scoring_config_policy_skip(self, caplog):
+        """Forward-referenced scoring config with SKIP policy silently omits incompatible config."""
+        import sys
+
+        class _DeferredSkipAttack:
+            def __init__(
+                self,
+                *,
+                objective_target: PromptTarget,
+                attack_scoring_config: "DeferredSkipConfig | None" = None,  # noqa: F821
+            ):
+                self.objective_target = objective_target
+                self.attack_scoring_config = attack_scoring_config
+
+            def get_identifier(self):
+                return ComponentIdentifier(class_name="_DeferredSkipAttack", class_module=__name__)
+
+        factory = AttackTechniqueFactory(
+            name="deferred_skip_test",
+            attack_class=_DeferredSkipAttack,
+            scorer_override_policy=ScorerOverridePolicy.SKIP,
+            uses_adversarial=False,
+        )
+
+        class _DeferredSkipConfig(AttackScoringConfig):
+            pass
+
+        mod_dict = sys.modules[_DeferredSkipAttack.__module__].__dict__
+        mod_dict["DeferredSkipConfig"] = _DeferredSkipConfig
+
+        try:
+            target = MagicMock(spec=PromptTarget)
+            technique = factory.create(objective_target=target, attack_scoring_config=AttackScoringConfig())
+            assert technique.attack.attack_scoring_config is None
+            assert "incompatible" not in caplog.text
+        finally:
+            mod_dict.pop("DeferredSkipConfig", None)
 
 
 class TestFactoryIdentifier:
