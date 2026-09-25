@@ -4,7 +4,7 @@
 """Tests for the AttackTechniqueFactory class."""
 
 import warnings
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,6 +17,12 @@ from pyrit.prompt_normalizer import ConverterConfiguration
 from pyrit.prompt_target import PromptTarget
 from pyrit.scenario.core.attack_technique import AttackTechnique
 from pyrit.scenario.core.attack_technique_factory import AttackTechniqueFactory, ScorerOverridePolicy
+
+if TYPE_CHECKING:
+    # The regression tests bind these names only after constructing each factory.
+    DeferredNarrowConfig = AttackScoringConfig
+    DeferredWarnConfig = AttackScoringConfig
+    DeferredSkipConfig = AttackScoringConfig
 
 
 def _make_seed_technique() -> AttackTechniqueSeedGroup:
@@ -449,7 +455,7 @@ class TestFactoryCreate:
                 self,
                 *,
                 objective_target: PromptTarget,
-                attack_scoring_config: "DeferredNarrowConfig | None" = None,  # noqa: F821
+                attack_scoring_config: "DeferredNarrowConfig | None" = None,
             ):
                 self.objective_target = objective_target
                 self.attack_scoring_config = attack_scoring_config
@@ -492,7 +498,7 @@ class TestFactoryCreate:
                 self,
                 *,
                 objective_target: PromptTarget,
-                attack_scoring_config: "DeferredWarnConfig | None" = None,  # noqa: F821
+                attack_scoring_config: "DeferredWarnConfig | None" = None,
             ):
                 self.objective_target = objective_target
                 self.attack_scoring_config = attack_scoring_config
@@ -530,7 +536,7 @@ class TestFactoryCreate:
                 self,
                 *,
                 objective_target: PromptTarget,
-                attack_scoring_config: "DeferredSkipConfig | None" = None,  # noqa: F821
+                attack_scoring_config: "DeferredSkipConfig | None" = None,
             ):
                 self.objective_target = objective_target
                 self.attack_scoring_config = attack_scoring_config

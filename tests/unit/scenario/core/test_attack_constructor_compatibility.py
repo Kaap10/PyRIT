@@ -10,6 +10,10 @@ import pytest
 from pyrit.executor.attack.core.attack_config import AttackScoringConfig
 from pyrit.scenario.core._attack_constructor_compatibility import ScorerOverridePolicy, _ConstructorCompatibilityHelper
 
+if typing.TYPE_CHECKING:
+    # The regression test binds this name only after constructing the helper.
+    DeferredConfig = AttackScoringConfig
+
 
 class _StubAttack:
     def __init__(
@@ -250,7 +254,7 @@ class TestGetScoringConfigType:
 
     def test_resolves_deferred_forward_ref_after_init(self):
         class _AttackWithDeferredRef:
-            def __init__(self, *, attack_scoring_config: "DeferredConfig | None" = None):  # noqa: F821
+            def __init__(self, *, attack_scoring_config: "DeferredConfig | None" = None):
                 pass
 
         helper = _ConstructorCompatibilityHelper(
