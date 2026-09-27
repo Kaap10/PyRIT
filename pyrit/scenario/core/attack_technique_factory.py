@@ -81,6 +81,7 @@ class AttackTechniqueFactory(Identifiable):
         adversarial_chat: PromptTarget | None = None,
         adversarial_system_prompt: str | SeedPrompt | None = None,
         adversarial_seed_prompt: SeedPrompt | str | None = None,
+        adversarial_prompt_template: str | SeedPrompt | None = None,
         seed_technique: AttackTechniqueSeedGroup | None = None,
         uses_adversarial: bool | None = None,
         supports_additional_request_converters: bool = False,
@@ -115,6 +116,13 @@ class AttackTechniqueFactory(Identifiable):
                 ``str``) used to generate the adversarial chat's first message.
                 Combined with the resolved target like
                 ``adversarial_system_prompt``.
+            adversarial_prompt_template: Optional per-turn template (``str`` or
+                ``SeedPrompt``) rendered each turn to wrap the feedback the
+                manager computes from the objective target's latest response
+                (receives ``feedback_text`` and ``objective``). Passes straight
+                through to ``AttackAdversarialConfig.adversarial_prompt_template``;
+                when ``None`` the attack's own default is used. Combined with the
+                resolved target like ``adversarial_system_prompt``.
             seed_technique: Optional technique seed group attached to created
                 techniques.
             uses_adversarial: Whether this technique drives an adversarial
@@ -144,8 +152,11 @@ class AttackTechniqueFactory(Identifiable):
         self._adversarial_chat = adversarial_chat
         self._adversarial_system_prompt = adversarial_system_prompt
         self._adversarial_seed_prompt = adversarial_seed_prompt
+        self._adversarial_prompt_template = adversarial_prompt_template
         self._has_custom_adversarial_prompt = (
-            adversarial_system_prompt is not None or adversarial_seed_prompt is not None
+            adversarial_system_prompt is not None
+            or adversarial_seed_prompt is not None
+            or adversarial_prompt_template is not None
         )
         self._adversarial_system_prompt_prefix: str | None = None
         self._seed_technique = seed_technique
@@ -610,6 +621,7 @@ class AttackTechniqueFactory(Identifiable):
         adversarial_chat: PromptTarget | None = None,
         adversarial_system_prompt: str | SeedPrompt | None = None,
         adversarial_seed_prompt: SeedPrompt | str | None = None,
+        adversarial_prompt_template: str | SeedPrompt | None = None,
         attack_converter_config_override: AttackConverterConfig | None = None,
         extra_request_converters: list[ConverterConfiguration] | None = None,
     ) -> AttackTechnique:
@@ -650,6 +662,9 @@ class AttackTechniqueFactory(Identifiable):
             adversarial_seed_prompt: Optional seed prompt (``SeedPrompt`` or
                 ``str``) for the adversarial chat's first message. Only valid when
                 the factory did not bake a custom adversarial prompt.
+            adversarial_prompt_template: Optional per-turn feedback template
+                (``str`` or ``SeedPrompt``) for the adversarial chat. Only valid
+                when the factory did not bake a custom adversarial prompt.
             attack_converter_config_override: When non-None, replaces any
                 converter config baked into the factory.  Only forwarded if
                 the attack class constructor accepts ``attack_converter_config``.
@@ -678,11 +693,14 @@ class AttackTechniqueFactory(Identifiable):
             )
 
         if (
-            adversarial_system_prompt is not None or adversarial_seed_prompt is not None
+            adversarial_system_prompt is not None
+            or adversarial_seed_prompt is not None
+            or adversarial_prompt_template is not None
         ) and self._has_custom_adversarial_prompt:
             raise ValueError(
                 f"Factory '{self._name}': a custom adversarial prompt is already baked into this technique, "
-                f"so create() cannot supply 'adversarial_system_prompt' or 'adversarial_seed_prompt'."
+                f"so create() cannot supply 'adversarial_system_prompt', 'adversarial_seed_prompt', or "
+                f"'adversarial_prompt_template'."
             )
 
         kwargs = dict(self._attack_kwargs)
@@ -697,6 +715,7 @@ class AttackTechniqueFactory(Identifiable):
             create_time_target is not None
             or adversarial_system_prompt is not None
             or adversarial_seed_prompt is not None
+            or adversarial_prompt_template is not None
             or self._adversarial_system_prompt_prefix is not None
             or self._uses_adversarial
         ):
@@ -704,21 +723,51 @@ class AttackTechniqueFactory(Identifiable):
                 create_time_target=create_time_target,
                 create_time_system_prompt=adversarial_system_prompt,
                 create_time_seed_prompt=adversarial_seed_prompt,
+                create_time_prompt_template=adversarial_prompt_template,
             )
-        if attack_converter_config_override is not None and "attack_converter_config" in accepted_params:
-            kwargs["attack_converter_config"] = attack_converter_config_override
-
-        if extra_request_converters and "attack_converter_config" in accepted_params:
-            existing = kwargs.get("attack_converter_config")
-            base_request = list(existing.request_converters) if existing else []
-            base_response = list(existing.response_converters) if existing else []
-            kwargs["attack_converter_config"] = AttackConverterConfig(
-                request_converters=base_request + list(extra_request_converters),
-                response_converters=base_response,
+        if "attack_converter_config" in accepted_params:
+            converter_config = self._compose_converter_config(
+                attack_converter_config_override=attack_converter_config_override,
+                extra_request_converters=extra_request_converters,
             )
+            if converter_config is not None:
+                kwargs["attack_converter_config"] = converter_config
 
         attack = self._attack_class(**kwargs)
         return AttackTechnique(attack=attack, seed_technique=self._seed_technique)
+
+    def _compose_converter_config(
+        self,
+        *,
+        attack_converter_config_override: AttackConverterConfig | None = None,
+        extra_request_converters: list[ConverterConfiguration] | None = None,
+    ) -> AttackConverterConfig | None:
+        """
+        Compose the effective converter config without mutating stored or caller-owned inputs.
+
+        Args:
+            attack_converter_config_override (AttackConverterConfig | None): Config that replaces the baked config.
+            extra_request_converters (list[ConverterConfiguration] | None): Request converters to append.
+
+        Returns:
+            AttackConverterConfig | None: The selected config with any extra request converters appended,
+                or None when neither a config nor extra converters are present.
+        """
+        base: AttackConverterConfig | None = (
+            attack_converter_config_override
+            if attack_converter_config_override is not None
+            else self._attack_kwargs.get("attack_converter_config")
+        )
+
+        if not extra_request_converters:
+            return base
+
+        base_request = list(base.request_converters) if base else []
+        base_response = list(base.response_converters) if base else []
+        return AttackConverterConfig(
+            request_converters=base_request + list(extra_request_converters),
+            response_converters=base_response,
+        )
 
     def _build_adversarial_config(
         self,
@@ -726,6 +775,7 @@ class AttackTechniqueFactory(Identifiable):
         create_time_target: PromptTarget | None = None,
         create_time_system_prompt: str | SeedPrompt | None = None,
         create_time_seed_prompt: SeedPrompt | str | None = None,
+        create_time_prompt_template: str | SeedPrompt | None = None,
     ) -> AttackAdversarialConfig:
         """
         Build the adversarial config for a created attack, resolving the target lazily.
@@ -734,13 +784,16 @@ class AttackTechniqueFactory(Identifiable):
         ``adversarial_chat``, then the lazily-resolved default adversarial target. (The
         factory never bakes a target *and* receives a create-time one — ``create()`` raises
         on that conflict.) The factory's custom ``adversarial_system_prompt`` /
-        ``adversarial_seed_prompt`` take precedence over the create-time values, so a
-        technique keeps its bespoke persona while a scenario can still supply the target.
+        ``adversarial_seed_prompt`` / ``adversarial_prompt_template`` take precedence over the
+        create-time values, so a technique keeps its bespoke persona while a scenario can still
+        supply the target.
 
         Args:
             create_time_target: An adversarial target supplied at ``create()`` time.
             create_time_system_prompt: An adversarial system prompt supplied at ``create()`` time.
             create_time_seed_prompt: An adversarial seed prompt supplied at ``create()`` time.
+            create_time_prompt_template: An adversarial per-turn feedback template supplied
+                at ``create()`` time.
 
         Returns:
             AttackAdversarialConfig: Config wrapping the resolved adversarial chat target.
@@ -754,6 +807,11 @@ class AttackTechniqueFactory(Identifiable):
 
         system_prompt = self._adversarial_system_prompt or create_time_system_prompt
         seed_prompt = self._adversarial_seed_prompt or create_time_seed_prompt
+        prompt_template = (
+            self._adversarial_prompt_template
+            if self._adversarial_prompt_template is not None
+            else create_time_prompt_template
+        )
 
         config_kwargs: dict[str, Any] = {
             "target": target,
@@ -763,6 +821,8 @@ class AttackTechniqueFactory(Identifiable):
             config_kwargs["system_prompt"] = system_prompt
         if seed_prompt is not None:
             config_kwargs["first_message"] = seed_prompt
+        if prompt_template is not None:
+            config_kwargs["adversarial_prompt_template"] = prompt_template
         return AttackAdversarialConfig(**config_kwargs)
 
     def _copy_seed_technique_with_prefix(
@@ -851,6 +911,8 @@ class AttackTechniqueFactory(Identifiable):
             params["adversarial_system_prompt"] = self._serialize_value(self._adversarial_system_prompt)
         if self._adversarial_seed_prompt is not None:
             params["adversarial_seed_prompt"] = self._serialize_value(self._adversarial_seed_prompt)
+        if self._adversarial_prompt_template is not None:
+            params["adversarial_prompt_template"] = self._serialize_value(self._adversarial_prompt_template)
         if self._adversarial_system_prompt_prefix is not None:
             params["adversarial_system_prompt_prefix"] = self._adversarial_system_prompt_prefix
 
