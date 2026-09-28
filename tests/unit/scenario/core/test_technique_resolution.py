@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-"""Unit tests for pyrit.scenario.core.technique_resolution."""
+"""Unit tests for pyrit.scenario.core._technique_resolution."""
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -9,13 +9,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pyrit.prompt_target import PromptTarget
-from pyrit.scenario.core.attack_technique_factory import AttackTechniqueFactory
-from pyrit.scenario.core.scenario_context import ScenarioContext
-from pyrit.scenario.core.technique_resolution import (
+from pyrit.scenario.core._technique_resolution import (
     TechniqueResolutionError,
     resolve_technique_factories,
     resolve_technique_factories_for_techniques,
 )
+from pyrit.scenario.core.attack_technique_factory import AttackTechniqueFactory
+from pyrit.scenario.core.scenario_context import ScenarioContext
 
 
 def _mock_factory(*, name: str) -> MagicMock:

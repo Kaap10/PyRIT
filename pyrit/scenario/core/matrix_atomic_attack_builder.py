@@ -26,13 +26,13 @@ from pyrit.executor.attack import AttackScoringConfig
 from pyrit.executor.attack.single_turn.prompt_sending import PromptSendingAttack
 from pyrit.models import AttackSeedGroup
 from pyrit.prompt_normalizer import ConverterConfiguration
-from pyrit.scenario.core.atomic_attack import AtomicAttack
-from pyrit.scenario.core.attack_technique import AttackTechnique
-from pyrit.scenario.core.technique_resolution import (
+from pyrit.scenario.core._technique_resolution import (
     TechniqueResolutionError,
     resolve_technique_factories,
     resolve_technique_factories_for_techniques,
 )
+from pyrit.scenario.core.atomic_attack import AtomicAttack
+from pyrit.scenario.core.attack_technique import AttackTechnique
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
