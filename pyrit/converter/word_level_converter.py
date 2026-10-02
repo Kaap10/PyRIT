@@ -49,7 +49,7 @@ class WordLevelConverter(Converter):
             ValueError: If ``word_split_separator`` is an empty string.
         """
         super().__init__(**kwargs)
-       if word_split_separator == "":
+        if word_split_separator == "":
             raise ValueError("word_split_separator must be None or a non-empty string.")
         self._word_selection_strategy = word_selection_strategy or AllWordsSelectionStrategy()
         self._word_split_separator = word_split_separator
