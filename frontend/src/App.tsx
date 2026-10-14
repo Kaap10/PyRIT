@@ -12,6 +12,7 @@ import AttackNotFound from './components/Chat/AttackNotFound'
 import Home from './components/Home/Home'
 import TargetConfig from './components/Config/TargetConfig'
 import ConverterRegistry from './components/Registry/ConverterRegistry'
+import TechniqueRegistry from './components/Registry/TechniqueRegistry'
 import RegistryLayout from './components/Registry/RegistryLayout'
 import Configuration from './components/Configuration/Configuration'
 import AttackHistory from './components/History/AttackHistory'
@@ -21,6 +22,8 @@ import ScenarioHistory from './components/History/ScenarioHistory'
 import ScenarioCatalog from './components/Scenarios/ScenarioCatalog'
 import ScenarioDetail from './components/Scenarios/ScenarioDetail'
 import ScenarioRunPage from './components/Scenarios/ScenarioRunPage'
+import DatasetCatalog from './components/Datasets/DatasetCatalog'
+import DatasetSelection from './components/Datasets/DatasetSelection'
 import FeedbackDialog from './components/Feedback/FeedbackDialog'
 import type { HistoryFilters } from './components/History/historyFilters'
 import { ConnectionBanner } from './components/ConnectionBanner'
@@ -53,6 +56,8 @@ import { useTour } from './hooks/useTour'
 import {
   attackConversationRoutePath,
   attackRoutePath,
+  DATASET_DETAIL_PATH,
+  DATASETS_PATH,
   routerPathParamValue,
   scenarioRunProvenance,
   scenarioRunRoutePath,
@@ -69,6 +74,7 @@ const VIEW_PATHS: Record<ViewName, string> = {
   history: HISTORY_ATTACKS_PATH,
   registry: '/registry/targets',
   scenarios: '/scanner',
+  datasets: DATASETS_PATH,
   configuration: '/config',
 }
 
@@ -90,6 +96,12 @@ function viewFromPath(pathname: string): ViewName {
     || pathname.startsWith(`${VIEW_PATHS.scenarios}/`)
   ) {
     return 'scenarios'
+  }
+  if (
+    pathname === VIEW_PATHS.datasets
+    || pathname.startsWith(`${VIEW_PATHS.datasets}/`)
+  ) {
+    return 'datasets'
   }
   const match = (Object.entries(VIEW_PATHS) as [ViewName, string][]).find(
     ([, path]) => path === pathname,
@@ -136,6 +148,13 @@ interface LoadedAttack {
   status: AttackLoadStatus
 }
 
+interface ServerDefaults {
+  generation: string
+  revision: number
+  labels: Record<string, string>
+  error: string | null
+}
+
 function ConnectionBannerContainer() {
   const { status, reconnectCount } = useConnectionHealth()
   // Track how many reconnects the user has already had the banner dismissed for.
@@ -159,7 +178,7 @@ function ConnectionBannerContainer() {
 }
 
 function AppContent({ operatorAlias }: { operatorAlias: string | null }) {
-  const { generation } = useRuntime()
+  const { generation, ready } = useRuntime()
   const navigate = useNavigate()
   const [isNavigatingToCreatedAttack, startCreatedAttackTransition] = useTransition()
   const location = useLocation()
@@ -211,7 +230,14 @@ function AppContent({ operatorAlias }: { operatorAlias: string | null }) {
     }
   }, [generation])
 
-  const [defaultLabels, setDefaultLabels] = useState<Record<string, string>>(DEFAULT_GLOBAL_LABELS)
+  const [serverDefaults, setServerDefaults] = useState<ServerDefaults | null>(null)
+  const [defaultsRevision, setDefaultsRevision] = useState(0)
+  const defaultLabels = serverDefaults?.labels ?? DEFAULT_GLOBAL_LABELS
+  const defaultsCurrent = serverDefaults !== null
+    && serverDefaults.generation === generation
+    && serverDefaults.revision === defaultsRevision
+  const defaultsError = defaultsCurrent ? serverDefaults.error : null
+  const defaultsReady = defaultsCurrent && !defaultsError
   const globalLabels = useMemo<Record<string, string>>(() => Object.fromEntries(
     Object.entries({
       ...defaultLabels,
@@ -290,32 +316,42 @@ function AppContent({ operatorAlias }: { operatorAlias: string | null }) {
 
   // User choices remain separate, so a late response cannot replace an edit.
   useEffect(() => {
+    if (!ready) return
     let ignore = false
 
-    async function initLabels() {
+    async function initLabels(): Promise<void> {
       try {
         const data = await versionApi.getVersion()
         if (ignore) return
-        setDefaultLabels({ ...DEFAULT_GLOBAL_LABELS, ...data.default_labels })
+        setServerDefaults({
+          generation,
+          revision: defaultsRevision,
+          labels: { ...DEFAULT_GLOBAL_LABELS, ...data.default_labels },
+          error: null,
+        })
         if (data.display || data.version) {
-          if (!ignore) setAppVersion(data.display ?? data.version ?? '')
+          setAppVersion(data.display ?? data.version ?? '')
         }
-      } catch {
-        /* version fetch handled elsewhere */
+      } catch (error: unknown) {
+        if (ignore) return
+        setServerDefaults((previous) => ({
+          generation,
+          revision: defaultsRevision,
+          labels: previous?.labels ?? DEFAULT_GLOBAL_LABELS,
+          error: toApiError(error).detail,
+        }))
       }
-
     }
 
-    initLabels()
+    void initLabels()
     return () => { ignore = true }
-  }, [])
+  }, [generation, ready, defaultsRevision])
 
   // Hydrate loadedAttack from the routed attack id. Depends on routeAttackId
   // ONLY, so switching conversations within an attack never refetches.
   useEffect(() => {
     if (!routeAttackId) {
       // Intentional cleanup of async-sourced state, not a derivable render value.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoadedAttack(null)
       validatedConversationForAttack.current = null
       return
@@ -588,6 +624,7 @@ function AppContent({ operatorAlias }: { operatorAlias: string | null }) {
       onHumanScoreChange={handleHumanScoreChange}
       onAttackChange={handleAttackChange}
       labels={globalLabels}
+      defaultsReady={defaultsReady}
       onNavigate={handleNavigate}
       attackOperator={readyAttack ? readyAttack.operator : null}
       attackTarget={readyAttack ? readyAttack.target : null}
@@ -631,6 +668,21 @@ function AppContent({ operatorAlias }: { operatorAlias: string | null }) {
             operatorReadOnly={Boolean(operatorAlias)}
             toolbarRef={setChatToolbarContainer}
           >
+            {ready && !defaultsReady && (
+              <MessageBar intent={defaultsError ? 'error' : 'info'}>
+                <MessageBarBody>
+                  {defaultsError
+                    ? `Could not load default labels. ${defaultsError}`
+                    : 'Loading default labels.'}
+                  {' '}New attacks and scans are unavailable until default labels are loaded.
+                  {defaultsError && (
+                    <Button onClick={() => setDefaultsRevision((revision: number) => revision + 1)}>
+                      Retry default labels
+                    </Button>
+                  )}
+                </MessageBarBody>
+              </MessageBar>
+            )}
             {preferenceError && (
               <MessageBar intent="warning">
                 <MessageBarBody>{preferenceError}</MessageBarBody>
@@ -690,9 +742,12 @@ function AppContent({ operatorAlias }: { operatorAlias: string | null }) {
                   }
                 />
                 <Route path="converters" element={<ConverterRegistry />} />
+                <Route path="techniques" element={<TechniqueRegistry />} />
               </Route>
               <Route path="/targets" element={<Navigate to="/registry/targets" replace />} />
               <Route path="/scanner" element={<ScenarioCatalog />} />
+              <Route path={DATASETS_PATH} element={<DatasetCatalog />} />
+              <Route path={DATASET_DETAIL_PATH} element={<DatasetSelection />} />
               <Route
                 path="/scanner/:scenarioName"
                 element={
@@ -708,6 +763,7 @@ function AppContent({ operatorAlias }: { operatorAlias: string | null }) {
                     defaultObjectiveTarget={targetDefaults.objectiveTarget}
                     defaultAdversarialTarget={targetDefaults.adversarialTarget}
                     labels={globalLabels}
+                    defaultsReady={defaultsReady}
                     onNavigate={handleNavigate}
                   />
                 }

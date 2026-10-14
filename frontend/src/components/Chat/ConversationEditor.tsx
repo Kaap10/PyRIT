@@ -101,8 +101,13 @@ function DraftPieceEditor({ piece, disabled, onChange, onAttachments, onConverte
       })
   }, [media, onChange, piece.draftId])
   const changeAttachments = useCallback((attachments: MessageAttachment[]): void => {
+    if (media) {
+      const nextUrls = new Set(attachments.map((attachment: MessageAttachment) => attachment.url))
+      const current = draftAttachment(piece)
+      if (!nextUrls.has(current.url) && current.url.startsWith('blob:')) URL.revokeObjectURL(current.url)
+    }
     onAttachments(piece.draftId, attachments)
-  }, [onAttachments, piece.draftId])
+  }, [media, piece, onAttachments])
   const clearConversion = (): void => onChange(piece.draftId, (current: ConversationDraftPiece) => ({
     ...current, converted_value: undefined, converted_value_data_type: undefined, applied_converter_ids: [],
   }))
@@ -156,6 +161,7 @@ interface ConversationEditorProps {
   controller: ReturnType<typeof useConversationDraft>
   ref?: Ref<ConversationEditorHandle>
   sameAttackDisabledReason?: string
+  newAttackDisabledReason?: string
   onSaved: (response: AddMessageResponse) => void
 }
 
@@ -165,7 +171,7 @@ export interface ConversationEditorHandle {
 }
 
 export default function ConversationEditor({
-  controller, ref, sameAttackDisabledReason, onSaved,
+  controller, ref, sameAttackDisabledReason, newAttackDisabledReason, onSaved,
 }: ConversationEditorProps) {
   const styles = useConversationEditorStyles()
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -300,6 +306,7 @@ export default function ConversationEditor({
       </div>
       </div>
       {saveDialogOpen && <SaveConversationDialog sameAttackDisabledReason={sameAttackDisabledReason}
+        newAttackDisabledReason={newAttackDisabledReason}
         validationError={validationError ?? targetError}
         initialDestination={saveDestination}
         objectiveChanged={draft?.objective.trim() !== draft?.initialObjective} saving={saving} error={error}
