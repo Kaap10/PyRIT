@@ -84,7 +84,7 @@ async def test_send_prompt_async(mock_request, mock_http_target, mock_http_respo
     mock_request.assert_called_with(
         method="POST",
         url="https://example.com/",
-        headers={"host": "example.com", "content-type": "application/json", "content-length": "25"},
+        headers={"host": "example.com", "content-type": "application/json"},
         content='{"prompt": "test_prompt"}',
         follow_redirects=True,
     )
@@ -356,7 +356,7 @@ async def test_send_prompt_regex_parse_async(mock_request, mock_http_target):
     mock_request.assert_called_with(
         method="POST",
         url="https://example.com/",
-        headers={"host": "example.com", "content-type": "application/json", "content-length": "25"},
+        headers={"host": "example.com", "content-type": "application/json"},
         content='{"prompt": "test_prompt"}',
         follow_redirects=True,
     )
@@ -389,7 +389,7 @@ async def test_send_prompt_async_keeps_original_template(mock_request, mock_http
     mock_request.assert_called_with(
         method="POST",
         url="https://example.com/",
-        headers={"host": "example.com", "content-type": "application/json", "content-length": "25"},
+        headers={"host": "example.com", "content-type": "application/json"},
         content='{"prompt": "test_prompt"}',
         follow_redirects=True,
     )
@@ -417,14 +417,14 @@ async def test_send_prompt_async_keeps_original_template(mock_request, mock_http
     mock_request.assert_any_call(
         method="POST",
         url="https://example.com/",
-        headers={"host": "example.com", "content-type": "application/json", "content-length": "25"},
+        headers={"host": "example.com", "content-type": "application/json"},
         content='{"prompt": "test_prompt"}',
         follow_redirects=True,
     )
     mock_request.assert_any_call(
         method="POST",
         url="https://example.com/",
-        headers={"host": "example.com", "content-type": "application/json", "content-length": "32"},
+        headers={"host": "example.com", "content-type": "application/json"},
         content='{"prompt": "second_test_prompt"}',
         follow_redirects=True,
     )
@@ -544,62 +544,43 @@ def test_http_target_init_with_client_only():
     assert target.httpx_client_kwargs == {}
 
 
-@patch("httpx.AsyncClient.request", new_callable=AsyncMock)
-async def test_send_prompt_async_content_length_utf8_bytes(mock_request, patch_central_database):
-    # Setup HTTPTarget
-    request = "POST / HTTP/1.1\nHost: example.com\n\n{PROMPT}"
+def test_parse_raw_http_request_strips_transfer_encoding_and_content_length(patch_central_database):
+    request = (
+        "POST / HTTP/1.1\n"
+        "Host: example.com\n"
+        "Content-Type: application/json\n"
+        "Transfer-Encoding: chunked\n"
+        "Content-Length: 100\n\n"
+        '{"test": "val"}'
+    )
     target = HTTPTarget(http_request=request)
+    headers, body, _, _, _ = target.parse_raw_http_request(request)
 
-    # Send a prompt containing multi-byte characters (e.g., emojis or non-ASCII text)
-    # "你好" has 2 characters, but in UTF-8 it is 6 bytes.
-    message = Message(message_pieces=[MessagePiece(role="user", original_value="你好")])
-    mock_response = MagicMock()
-    mock_response.content = b"ok"
-    mock_request.return_value = mock_response
-
-    await target.send_prompt_async(message=message)
-
-    # Validate that the requested header dict updated Content-Length to the correct byte length
-    assert mock_request.call_args.kwargs["headers"]["content-length"] == "6"
+    assert headers == {"host": "example.com", "content-type": "application/json"}
+    assert "transfer-encoding" not in headers
+    assert "content-length" not in headers
+    assert body == '{"test": "val"}'
 
 
-@patch("httpx.AsyncClient.request", new_callable=AsyncMock)
-async def test_send_prompt_async_content_length_recalculated(mock_request, patch_central_database):
-    # Setup HTTPTarget with an old content-length
-    request = "POST / HTTP/1.1\nHost: example.com\ncontent-length: 0\n\n{PROMPT}"
-    target = HTTPTarget(http_request=request)
+async def test_send_prompt_async_strips_transfer_encoding_and_sends_intact_multibyte_body(patch_central_database):
+    captured_requests: list[httpx.Request] = []
 
-    # Send standard ASCII payload
-    message = Message(message_pieces=[MessagePiece(role="user", original_value="test")])
-    mock_response = MagicMock()
-    mock_response.content = b"ok"
-    mock_request.return_value = mock_response
+    def handle_request(request: httpx.Request) -> httpx.Response:
+        captured_requests.append(request)
+        return httpx.Response(200, text="ok")
 
-    await target.send_prompt_async(message=message)
+    raw_request = "POST / HTTP/1.1\nHost: example.com\nTransfer-Encoding: chunked\nContent-Length: 5\n\n{PROMPT}"
+    target = HTTPTarget(http_request=raw_request, transport=httpx.MockTransport(handle_request))
+    message = Message.from_prompt(prompt="你好世界", role="user")
 
-    # Validate that it correctly identified and updated the header
-    assert mock_request.call_args.kwargs["headers"]["content-length"] == "4"
+    response = await target.send_prompt_async(message=message)
 
+    assert len(response) == 1
+    assert response[0].get_value() == "ok"
+    assert len(captured_requests) == 1
 
-@patch("httpx.AsyncClient.request", new_callable=AsyncMock)
-async def test_send_prompt_async_content_length_raw_bytes(mock_request, patch_central_database):
-    target = HTTPTarget(http_request="POST / HTTP/1.1\nHost: example.com\n\n")
-    message = Message(message_pieces=[MessagePiece(role="user", original_value="test")])
-    mock_response = MagicMock()
-    mock_response.content = b"ok"
-    mock_request.return_value = mock_response
-
-    with patch.object(
-        target,
-        "parse_raw_http_request",
-        return_value=(
-            {"host": "example.com"},
-            b"raw_byte_data",
-            "https://example.com/",
-            "POST",
-            "HTTP/1.1",
-        ),
-    ):
-        await target.send_prompt_async(message=message)
-
-    assert mock_request.call_args.kwargs["headers"]["content-length"] == "13"
+    req = captured_requests[0]
+    assert "transfer-encoding" not in req.headers
+    # Verify httpx computed the accurate UTF-8 byte length on the wire (12 bytes for "你好世界")
+    assert req.headers.get("content-length") == "12"
+    assert req.content == "你好世界".encode()
