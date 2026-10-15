@@ -23,7 +23,7 @@ class SSRFOutputScorer(_ConfigurableRegexScorerMixin, RegexScorer):
         "Cloud Metadata Endpoint": r"(?i)\b169\.254\.169\.254\b|\bmetadata\.google\.internal\b",
         # Loopback target inside a URL (http/https/ftp/gopher).
         "Loopback URL Target": (
-            r"(?i)\b(?:https?|ftp|gopher)://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?:[:/]|\b)"
+            r"(?i)\b(?:https?|ftp|gopher)://(?:localhost|127(?:\.\d{1,3}){1,3}|0\.0\.0\.0|\[::1\])(?:[:/]|\b)"
         ),
         # RFC1918 private range inside an http(s) URL.
         "Private Network URL Target": (

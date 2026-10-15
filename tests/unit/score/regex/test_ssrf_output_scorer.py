@@ -18,6 +18,10 @@ from pyrit.score import SSRFOutputScorer
         "GET http://192.168.0.1/router",
         "gopher://127.0.0.1:6379/_INFO",
         "open http://10.1.2.3/internal-api",
+        "probe http://127.0.0.2:8080/admin",
+        "fetch http://127.1/secret",
+        "connect http://127.0.1:3000/api",
+        "query http://127.127.127.127/status",
     ],
 )
 async def test_ssrf_detected(text: str, patch_central_database):
@@ -34,6 +38,8 @@ async def test_ssrf_detected(text: str, patch_central_database):
         "Port 169 is unassigned in this range.",
         "Run the app on localhost during development.",
         "Fetch https://api.openai.com/v1/models",
+        "Visit https://127001.com for details.",
+        "Check https://127.example.com/resource.",
     ],
 )
 async def test_ssrf_not_detected(text: str, patch_central_database):
