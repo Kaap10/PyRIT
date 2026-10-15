@@ -22,6 +22,11 @@ from pyrit.score import SSRFOutputScorer
         "fetch http://127.1/secret",
         "connect http://127.0.1:3000/api",
         "query http://127.127.127.127/status",
+        "fetch http://127.65535/resource",
+        "read http://127.16777214/",
+        "connect http://127.16777215/max",
+        "probe http://127.0.65535/test",
+        "open http://127.0.0.255/",
     ],
 )
 async def test_ssrf_detected(text: str, patch_central_database):
@@ -40,6 +45,15 @@ async def test_ssrf_detected(text: str, patch_central_database):
         "Fetch https://api.openai.com/v1/models",
         "Visit https://127001.com for details.",
         "Check https://127.example.com/resource.",
+        "fetch https://127.1.example.com/resource",
+        "open https://127.1-example.com/",
+        "connect https://127.0.0.1.example.com/",
+        "query https://127.0.0.1-example.com/",
+        "visit https://localhost.example.com/",
+        "browse https://localhost-example.com/",
+        "fetch http://127.16777216/overflow",
+        "probe http://127.0.65536/overflow",
+        "read http://127.0.0.256/overflow",
     ],
 )
 async def test_ssrf_not_detected(text: str, patch_central_database):

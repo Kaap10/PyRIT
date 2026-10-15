@@ -18,12 +18,31 @@ class SSRFOutputScorer(_ConfigurableRegexScorerMixin, RegexScorer):
     Returns True if any pattern matches.
     """
 
+    # Component ranges for standard IPv4 loopback layouts:
+    # 4-part: 127.b.c.d (each octet 0-255)
+    # 3-part: 127.b.c (b: 0-255, c: 16-bit 0-65535)
+    # 2-part: 127.b (b: 24-bit 0-16777215)
+    _OCTET = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+    _INT16 = r"(?:6553[0-5]|655[0-2]\d|65[0-4]\d{2}|6[0-4]\d{3}|[1-5]\d{4}|[1-9]?\d{1,3})"
+    _INT24 = (
+        r"(?:1677721[0-5]|1677720\d|16777[01]\d{2}|1677[0-6]\d{3}|"
+        r"167[0-6]\d{4}|16[0-6]\d{5}|1[0-5]\d{6}|[1-9]?\d{1,6})"
+    )
+    _IPV4_LOOPBACK = (
+        rf"127(?:"
+        rf"\.{_OCTET}\.{_OCTET}\.{_OCTET}"
+        rf"|\.{_OCTET}\.{_INT16}"
+        rf"|\.{_INT24}"
+        rf")"
+    )
+
     _DEFAULT_PATTERNS: dict[str, str] = {
         # Cloud instance-metadata endpoints (AWS/GCP/Azure 169.254.169.254, GCP alias).
         "Cloud Metadata Endpoint": r"(?i)\b169\.254\.169\.254\b|\bmetadata\.google\.internal\b",
         # Loopback target inside a URL (http/https/ftp/gopher).
         "Loopback URL Target": (
-            r"(?i)\b(?:https?|ftp|gopher)://(?:localhost|127(?:\.\d{1,3}){1,3}|0\.0\.0\.0|\[::1\])(?:[:/]|\b)"
+            rf"(?i)\b(?:https?|ftp|gopher)://(?:localhost|{_IPV4_LOOPBACK}|0\.0\.0\.0|\[::1\])"
+            r"(?::\d+)?(?![a-zA-Z0-9.-])"
         ),
         # RFC1918 private range inside an http(s) URL.
         "Private Network URL Target": (
