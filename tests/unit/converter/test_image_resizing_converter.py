@@ -249,3 +249,17 @@ def test_image_resizing_converter_minimum_output_dimensions(
     resized_image = converter._apply_transform(image)
 
     assert resized_image.size == expected_size
+
+
+def test_image_resizing_converter_cmyk_to_png_conversion():
+    """Test that converting a CMYK image with output_format='PNG' succeeds and converts to RGB."""
+    converter = ImageResizingConverter(output_format="PNG", scale_factor=0.5)
+    cmyk_image = Image.new("CMYK", (40, 40), (100, 50, 0, 0))
+
+    transformed_io, output_format = converter._transform_image(cmyk_image, "JPEG")
+    assert output_format == "PNG"
+
+    result_img = Image.open(transformed_io)
+    assert result_img.format == "PNG"
+    assert result_img.mode == "RGB"
+    assert result_img.size == (20, 20)

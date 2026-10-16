@@ -135,6 +135,8 @@ class BaseImageToImageConverter(Converter, ABC):
 
         if output_format == "JPEG":
             image = self._prepare_image_for_jpeg(image)
+        elif output_format == "PNG" and image.mode == "CMYK":
+            image = self._convert_to_rgb_or_rgba(image)
 
         transformed = self._apply_transform(image)
         buffer = BytesIO()

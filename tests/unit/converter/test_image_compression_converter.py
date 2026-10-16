@@ -379,3 +379,16 @@ async def test_image_compression_converter_output_format_fallback(sample_image_b
         mock_serializer.read_data_async.return_value = img_bytes
         await converter.convert_async(prompt="test.tiff", input_type="image_path")
         assert mock_serializer.file_extension == "jpeg"
+
+
+def test_image_compression_converter_cmyk_to_png_conversion():
+    """Test that compressing a CMYK image with output_format='PNG' succeeds and converts to RGB."""
+    converter = ImageCompressionConverter(output_format="PNG")
+    cmyk_image = Image.new("CMYK", (40, 40), (100, 50, 0, 0))
+
+    compressed_io, output_format = converter._compress_image(cmyk_image, "JPEG", 500)
+    assert output_format == "PNG"
+
+    result_img = Image.open(compressed_io)
+    assert result_img.format == "PNG"
+    assert result_img.mode == "RGB"

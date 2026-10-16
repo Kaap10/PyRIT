@@ -187,6 +187,8 @@ class ImageCompressionConverter(Converter):
                 image = background
             else:
                 image = image.convert("RGB")
+        elif output_format == "PNG" and image.mode == "CMYK":
+            image = image.convert("RGB")
 
         save_kwargs: dict[str, Any] = {}
 
