@@ -45,7 +45,7 @@ class SSRFOutputScorer(_ConfigurableRegexScorerMixin, RegexScorer):
         # Loopback target inside a URL (http/https/ftp/gopher).
         "Loopback URL Target": (
             rf"(?i)\b(?:https?|ftp|gopher)://(?:localhost|{_IPV4_LOOPBACK}|0\.0\.0\.0|\[::1\])"
-            r"\.?(?::[0-9]+)?"
+            r"\.?(?::[0-9]*)?"
             r"""(?=$|[/?#\s<>"'`]|[.,;!?)\]}]+(?=$|[\s<>"'`]))"""
         ),
         # RFC1918 private range inside an http(s) URL.

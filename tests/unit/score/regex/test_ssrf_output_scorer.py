@@ -82,6 +82,8 @@ async def test_ssrf_not_detected(text: str, patch_central_database):
         ("https://localhost!example.com/resource", False),
         ("http://127.1:invalid/", False),
         ("http://127.1", True),
+        ("http://127.1:/resource", True),
+        ("http://localhost:", True),
         ("http://127.1?mode=test", True),
         ("http://127.1#section", True),
         ("http://127.0.0.1./admin", True),
