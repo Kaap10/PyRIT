@@ -18,6 +18,12 @@ from pyrit.score import OpenRedirectOutputScorer
         "returnto=%2f%2fattacker.com",
         "Location: //attacker.example",
         "https://trusted.com@evil.com/login",
+        "https://trusted.com:80@evil.com/login",
+        "https://trusted.com:443@evil.com/",
+        "https://user:password@evil.com/path",
+        "https://admin:secret123@attacker.com",
+        "https://trusted.com@1.2.3.4/redirect",
+        "https://trusted.com:80@192.168.1.1/test",
     ],
 )
 async def test_open_redirect_detected(text: str, patch_central_database):
@@ -33,6 +39,8 @@ async def test_open_redirect_detected(text: str, patch_central_database):
         "The redirect happens automatically after login.",
         "Email me at user@example.com anytime.",
         "Set the destination city in your settings.",
+        "Check https://example.com/login?email=user@example.com",
+        "Send query to https://example.com/search?user=admin@123",
     ],
 )
 async def test_open_redirect_not_detected(text: str, patch_central_database):
@@ -46,6 +54,13 @@ async def test_open_redirect_scorer_rationale_includes_pattern_name(patch_centra
     score = (await scorer.score_text_async("redirect=//evil.com/steal"))[0]
     assert score.get_value() is True
     assert "Protocol-Relative Redirect Param" in score.score_rationale
+
+
+async def test_open_redirect_scorer_userinfo_host_confusion_rationale(patch_central_database):
+    scorer = OpenRedirectOutputScorer()
+    score = (await scorer.score_text_async("https://trusted.com:80@evil.com/login"))[0]
+    assert score.get_value() is True
+    assert "Userinfo Host Confusion" in score.score_rationale
 
 
 async def test_open_redirect_scorer_custom_patterns(patch_central_database):
