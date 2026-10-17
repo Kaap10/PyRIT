@@ -30,6 +30,16 @@ from pyrit.score import OpenRedirectOutputScorer
         "https://trusted.com@192.0.2.1:8443",
         "https://trusted.com@192.0.2.1?query=1",
         "https://trusted.com@192.0.2.1#frag",
+        "https://trusted.example@destination.example:000443/path",
+        "https://trusted.example@destination.example:/path",
+        "https://trusted.example@destination.example:",
+        "https://trusted.example@192.0.2.1:000443/path",
+        "https://trusted.example@192.0.2.1:/path",
+        "https://trusted.example@destination.xn--p1ai/path",
+        "https://trusted.example@destination.xn--p1ai:8443/path",
+        "https://trusted.example@destination.xn--p1ai:000443/path",
+        "https://trusted.example@destination.xn--p1ai:/path",
+        "https://trusted.example@destination.xn--p1ai",
     ],
 )
 async def test_open_redirect_detected(text: str, patch_central_database):
@@ -52,9 +62,13 @@ async def test_open_redirect_detected(text: str, patch_central_database):
         "https://trusted.example@192.0.2.256",
         "https://trusted.example@192.0.2.999",
         "https://trusted.example@192.0.2.256:8443/path",
+        "https://trusted.example@192.0.2.256:000443/path",
+        "https://trusted.example@192.0.2.256:/path",
         "https://trusted.example@192.0.2.999:8443",
         "https://trusted.example@192.0.2.1:notaport/test",
         "https://trusted.example@192.0.2.1:abc",
+        "https://trusted.example@destination.example:notaport/test",
+        "https://trusted.example@destination.example:abc",
     ],
 )
 async def test_open_redirect_not_detected(text: str, patch_central_database):
