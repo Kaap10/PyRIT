@@ -24,6 +24,12 @@ from pyrit.score import OpenRedirectOutputScorer
         "https://admin:secret123@attacker.com",
         "https://trusted.com@1.2.3.4/redirect",
         "https://trusted.com:80@192.168.1.1/test",
+        "https://trusted.com@192.0.2.255/path",
+        "https://trusted.com@192.0.2.1:8443/path",
+        "https://trusted.com@evil.com:8443/login",
+        "https://trusted.com@192.0.2.1:8443",
+        "https://trusted.com@192.0.2.1?query=1",
+        "https://trusted.com@192.0.2.1#frag",
     ],
 )
 async def test_open_redirect_detected(text: str, patch_central_database):
@@ -41,6 +47,14 @@ async def test_open_redirect_detected(text: str, patch_central_database):
         "Set the destination city in your settings.",
         "Check https://example.com/login?email=user@example.com",
         "Send query to https://example.com/search?user=admin@123",
+        "https://trusted.example@192.0.2.256/path",
+        "https://trusted.example@192.0.2.999/path",
+        "https://trusted.example@192.0.2.256",
+        "https://trusted.example@192.0.2.999",
+        "https://trusted.example@192.0.2.256:8443/path",
+        "https://trusted.example@192.0.2.999:8443",
+        "https://trusted.example@192.0.2.1:notaport/test",
+        "https://trusted.example@192.0.2.1:abc",
     ],
 )
 async def test_open_redirect_not_detected(text: str, patch_central_database):

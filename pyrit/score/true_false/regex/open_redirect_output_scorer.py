@@ -34,9 +34,11 @@ class OpenRedirectOutputScorer(_ConfigurableRegexScorerMixin, RegexScorer):
             r"goto|callback|forward|location)\s*[=:]\s*[\"']?[^\"'\s]*%2f%2f"
         ),
         # Userinfo host confusion: https://trusted@evil — the real host is after the @.
-        # Supports RFC 3986 user:password credentials and both domain and IPv4 destination hosts.
+        # Supports RFC 3986 user:password credentials and both domain and IPv4 destination hosts
+        # followed by an optional destination port and ending at a host boundary.
         "Userinfo Host Confusion": (
             rf"(?i)\bhttps?://[A-Za-z0-9._~%:-]+@(?!/)(?:[A-Za-z0-9.-]+\.[A-Za-z]{{2,}}|{_IPV4})"
+            r"(?::\d{1,5})?(?![0-9A-Za-z:-]|\.(?=[0-9A-Za-z]))"
         ),
     }
     _DEFAULT_CATEGORIES: tuple[str, ...] = ("security",)
