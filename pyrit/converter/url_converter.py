@@ -15,27 +15,16 @@ class UrlConverter(Converter):
     SUPPORTED_INPUT_TYPES = ("text",)
     SUPPORTED_OUTPUT_TYPES = ("text",)
 
-    def __init__(self, *, safe: str = "") -> None:
+    def __init__(self, *, safe: str = "/") -> None:
         """
         Initialize the converter with safe characters that should not be converted.
 
         Args:
-            safe (str): Characters that should not be URL-encoded. Defaults to "" (encodes
-                all reserved characters, including forward slashes, ensuring thorough URL
-                encoding for path traversal and SSRF payload testing).
-
-        Raises:
-            TypeError: If ``safe`` is not a string.
+            safe (str): Characters that should not be URL-encoded. Defaults to "/",
+                matching urllib.parse.quote. Set to "" to encode forward slashes.
         """
         super().__init__()
-        if not isinstance(safe, str):
-            raise TypeError(f"safe must be a str, got {type(safe).__name__}")
         self._safe = safe
-
-    @property
-    def safe(self) -> str:
-        """The characters preserved during URL encoding."""
-        return self._safe
 
     def _build_identifier(self) -> ComponentIdentifier:
         """

@@ -44,51 +44,37 @@ async def test_url_converter_input_not_supported():
         await converter.convert_async(prompt="hello", input_type="image_path")
 
 
-async def test_url_converter_default_encodes_forward_slash():
+async def test_url_converter_default_preserves_forward_slash_async() -> None:
     converter = UrlConverter()
-    result = await converter.convert_async(prompt="../../etc/passwd", input_type="text")
-    assert isinstance(result, ConverterResult)
-    assert "/" not in result.output_text
-    assert result.output_text == "..%2F..%2Fetc%2Fpasswd"
-    assert result.output_type == "text"
-
-    ssrf_result = await converter.convert_async(prompt="https://attacker.com/steal", input_type="text")
-    assert "/" not in ssrf_result.output_text
-    assert ssrf_result.output_text == "https%3A%2F%2Fattacker.com%2Fsteal"
+    result = await converter.convert_async(prompt="https://example.com/a b")
+    assert result.output_text == "https%3A//example.com/a%20b"
 
 
-async def test_url_converter_custom_safe():
-    converter_slash = UrlConverter(safe="/")
-    result_slash = await converter_slash.convert_async(prompt="../../etc/passwd", input_type="text")
-    assert result_slash.output_text == "../../etc/passwd"
-
-    converter_url = UrlConverter(safe="/:")
-    result_url = await converter_url.convert_async(prompt="https://example.com/test", input_type="text")
-    assert result_url.output_text == "https://example.com/test"
-
-    converter_query = UrlConverter(safe="?=")
-    result_query = await converter_query.convert_async(prompt="?query=1&foo=bar", input_type="text")
-    assert result_query.output_text == "?query=1%26foo=bar"
-
-
-def test_url_converter_property_and_identifier():
-    default_converter = UrlConverter()
-    assert default_converter.safe == ""
-    assert default_converter.get_identifier().params["safe"] == ""
-
-    custom_converter = UrlConverter(safe="/")
-    assert custom_converter.safe == "/"
-    assert custom_converter.get_identifier().params["safe"] == "/"
+@pytest.mark.parametrize(
+    ("safe", "prompt", "expected"),
+    [
+        ("", "../../etc/passwd", "..%2F..%2Fetc%2Fpasswd"),
+        ("", "https://example.com/test", "https%3A%2F%2Fexample.com%2Ftest"),
+        ("/:", "https://example.com/test", "https://example.com/test"),
+        ("?=", "?query=1&foo=bar", "?query=1%26foo=bar"),
+    ],
+)
+async def test_url_converter_custom_safe_async(*, safe: str, prompt: str, expected: str) -> None:
+    converter = UrlConverter(safe=safe)
+    result = await converter.convert_async(prompt=prompt)
+    assert result.output_text == expected
 
 
-def test_url_converter_invalid_safe_type():
-    with pytest.raises(TypeError, match="safe must be a str"):
-        UrlConverter(safe=123)  # type: ignore[arg-type]
+@pytest.mark.parametrize("safe", ["/", "", "/:"])
+def test_url_converter_identifier_and_reconstruction(safe: str) -> None:
+    converter = UrlConverter(safe=safe)
+    assert converter.get_identifier().params["safe"] == safe
+    params = converter.get_reconstruction_parameters()
+    assert params == {"safe": safe}
+    assert UrlConverter(**params).get_identifier() == converter.get_identifier()
 
 
-def test_url_converter_reconstruction():
-    default_converter = UrlConverter()
-    assert default_converter.get_reconstruction_parameters() == {"safe": ""}
-
-    custom_converter = UrlConverter(safe="/")
-    assert custom_converter.get_reconstruction_parameters() == {"safe": "/"}
+def test_url_converter_default_reconstruction() -> None:
+    converter = UrlConverter()
+    assert converter.get_identifier().params["safe"] == "/"
+    assert converter.get_reconstruction_parameters() == {"safe": "/"}
